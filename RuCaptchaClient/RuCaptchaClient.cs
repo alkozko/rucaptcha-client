@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace mevoronin.RuCaptchaNETClient
 {
@@ -14,34 +15,47 @@ namespace mevoronin.RuCaptchaNETClient
     /// </summary>
     public class RuCaptchaClient
     {
-        private readonly string api_key;
-        const string host = "http://rucaptcha.com";
-        static Dictionary<string, string> errors;
+        private readonly string _apiKey;
+        const string Host = "http://rucaptcha.com";
+        static readonly Dictionary<string, string> Errors = new Dictionary<string, string>
+        {
+            {
+                "CAPCHA_NOT_READY",
+                "Капча в работе, ещё не расшифрована, необходимо повтороить запрос через несколько секунд."
+            },
+            {"ERROR_WRONG_ID_FORMAT", "Неверный формат ID капчи. ID должен содержать только цифры."},
+            {"ERROR_WRONG_CAPTCHA_ID", "Неверное значение ID капчи."},
+            {
+                "ERROR_CAPTCHA_UNSOLVABLE",
+                "Капчу не смогли разгадать 3 разных работника. Средства за эту капчу не списываются."
+            },
+            {"ERROR_WRONG_USER_KEY", "Не верный формат параметра key, должно быть 32 символа."},
+            {"ERROR_KEY_DOES_NOT_EXIST", "Использован несуществующий key."},
+            {"ERROR_ZERO_BALANCE", "Баланс Вашего аккаунта нулевой."},
+            {
+                "ERROR_NO_SLOT_AVAILABLE",
+                "Текущая ставка распознования выше, чем максимально установленная в настройках Вашего аккаунта."
+            },
+            {"ERROR_ZERO_CAPTCHA_FILESIZE", "Размер капчи меньше 100 Байт."},
+            {"ERROR_TOO_BIG_CAPTCHA_FILESIZE", "Размер капчи более 100 КБайт."},
+            {
+                "ERROR_WRONG_FILE_EXTENSION",
+                "Ваша капча имеет неверное расширение, допустимые расширения jpg,jpeg,gif,png."
+            },
+            {"ERROR_IMAGE_TYPE_NOT_SUPPORTED", "Сервер не может определить тип файла капчи."},
+            {
+                "ERROR_IP_NOT_ALLOWED",
+                "В Вашем аккаунте настроено ограничения по IP с которых можно делать запросы. И IP, с которого пришёл данный запрос не входит в список разрешённых."
+            }
+        };
 
         /// <summary>
         /// Конструктор
         /// </summary>
-        /// <param name="api_key">Ключ доступа к API</param>
-        public RuCaptchaClient(string api_key)
+        /// <param name="apiKey">Ключ доступа к API</param>
+        public RuCaptchaClient(string apiKey)
         {
-            this.api_key = api_key;
-            if (errors == null)
-            {
-                errors = new Dictionary<string, string>();
-                errors.Add("CAPCHA_NOT_READY", "Капча в работе, ещё не расшифрована, необходимо повтороить запрос через несколько секунд.");
-                errors.Add("ERROR_WRONG_ID_FORMAT", "Неверный формат ID капчи. ID должен содержать только цифры.");
-                errors.Add("ERROR_WRONG_CAPTCHA_ID", "Неверное значение ID капчи.");
-                errors.Add("ERROR_CAPTCHA_UNSOLVABLE", "Капчу не смогли разгадать 3 разных работника. Средства за эту капчу не списываются.");
-                errors.Add("ERROR_WRONG_USER_KEY", "Не верный формат параметра key, должно быть 32 символа.");
-                errors.Add("ERROR_KEY_DOES_NOT_EXIST", "Использован несуществующий key.");
-                errors.Add("ERROR_ZERO_BALANCE", "Баланс Вашего аккаунта нулевой.");
-                errors.Add("ERROR_NO_SLOT_AVAILABLE", "Текущая ставка распознования выше, чем максимально установленная в настройках Вашего аккаунта.");
-                errors.Add("ERROR_ZERO_CAPTCHA_FILESIZE", "Размер капчи меньше 100 Байт.");
-                errors.Add("ERROR_TOO_BIG_CAPTCHA_FILESIZE", "Размер капчи более 100 КБайт.");
-                errors.Add("ERROR_WRONG_FILE_EXTENSION", "Ваша капча имеет неверное расширение, допустимые расширения jpg,jpeg,gif,png.");
-                errors.Add("ERROR_IMAGE_TYPE_NOT_SUPPORTED", "Сервер не может определить тип файла капчи.");
-                errors.Add("ERROR_IP_NOT_ALLOWED", "В Вашем аккаунте настроено ограничения по IP с которых можно делать запросы. И IP, с которого пришёл данный запрос не входит в список разрешённых.");
-            }
+            this._apiKey = apiKey;
         }
 
         /// <summary>
@@ -49,109 +63,121 @@ namespace mevoronin.RuCaptchaNETClient
         /// </summary>
         /// <param name="captchaId">Id капчи</param>
         /// <returns></returns>
-        public string GetCaptcha(string captchaId)
+        public async Task<string> GetCaptcha(string captchaId)
         {
-            string url = string.Format("{0}/res.php?key={1}&action=get&id={2}", host, api_key, captchaId);
-            return MakeGetRequest(url);
+            return await MakeGetRequest($"{Host}/res.php?key={_apiKey}&action=get&id={captchaId}");
         }
 
         /// <summary>
         /// Загрузить файл капчи
         /// </summary>
-        /// <param name="fileName">уть к файлу с капчей</param>
-        /// <returns></returns>
-        public string UploadCaptchaFile(string fileName)
-        {
-            return UploadCaptchaFile(fileName, null);
-        }
-        /// <summary>
-        /// Загрузить файл капчи
-        /// </summary>
-        /// <param name="fileName">уть к файлу с капчей</param>
+        /// <param name="fileName">Путь к файлу с капчей</param>
         /// <param name="config">Параметры</param>
         /// <returns></returns>
-        public string UploadCaptchaFile(string fileName, CaptchaConfig config)
+        public async Task<string> UploadCaptchaFile(string fileName, CaptchaConfig config = null)
         {
-            string url = string.Format("{0}/in.php", host);
-            NameValueCollection nvc = new NameValueCollection();
-            nvc.Add("key", api_key);
-            if (config != null)
-                nvc.Add(config.GetParameters());
+            byte[] imageBytes;
+            using (FileStream fileStream = new FileStream(fileName, FileMode.Open, FileAccess.Read))
+            {
+                imageBytes = new byte[fileStream.Length];
+                await fileStream.ReadAsync(imageBytes, 0, (int) fileStream.Length);
+            }
 
+            return await UploadCaptchaFile(fileName, imageBytes, config);
+        }
+
+        /// <summary>
+        /// Загрузить файл капчи
+        /// </summary>
+        /// <param name="fileUrl">Путь к файлу с капчей</param>
+        /// <param name="config">Параметры</param>
+        /// <returns></returns>
+        public async Task<string> UploadCaptchaFile(Uri fileUrl, CaptchaConfig config = null)
+        {
+            using (var webClient = new WebClient())
+            {
+                byte[] imageBytes = await webClient.DownloadDataTaskAsync(fileUrl);
+                return await UploadCaptchaFile(Guid.NewGuid().ToString().Replace("-", ""), imageBytes, config);
+            }
+        }
+
+        private async Task<string> UploadCaptchaFile(string fileName, byte[] imageBytes, CaptchaConfig config)
+        {
+            string url = $"{Host}/in.php";
             string boundary = "---------------------------" + DateTime.Now.Ticks.ToString("x");
-            byte[] boundarybytes = System.Text.Encoding.ASCII.GetBytes("\r\n--" + boundary + "\r\n");
+            byte[] boundarybytes = Encoding.ASCII.GetBytes("\r\n--" + boundary + "\r\n");
 
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+            HttpWebRequest request = (HttpWebRequest) WebRequest.Create(url);
             request.ContentType = "multipart/form-data; boundary=" + boundary;
             request.Method = "POST";
             request.KeepAlive = true;
-            request.Credentials = System.Net.CredentialCache.DefaultCredentials;
+            request.Credentials = CredentialCache.DefaultCredentials;
 
-            Stream requestStream = request.GetRequestStream();
+            using (Stream requestStream = request.GetRequestStream())
+            {
+                WriteKeys(requestStream, config, boundarybytes);
+                WriteHeader(requestStream, fileName);
+                requestStream.Write(imageBytes, 0, imageBytes.Length);
 
+
+                byte[] trailer = Encoding.ASCII.GetBytes("\r\n--" + boundary + "--\r\n");
+                requestStream.Write(trailer, 0, trailer.Length);
+            }
+
+            using (WebResponse response = await request.GetResponseAsync())
+            {
+                Stream responseStream = response.GetResponseStream();
+                StreamReader responseReader = new StreamReader(responseStream);
+                return ParseAnswer(await responseReader.ReadToEndAsync());
+            }
+        }
+
+        private static void WriteHeader(Stream requestStream, string fileName)
+        {
+            string headerTemplate =
+                "Content-Disposition: form-data; name=\"{0}\"; filename=\"{1}\"\r\nContent-Type: {2}\r\n\r\n";
+            string header = string.Format(headerTemplate, "file", fileName, "image/jpeg");
+            byte[] headerbytes = Encoding.UTF8.GetBytes(header);
+            requestStream.Write(headerbytes, 0, headerbytes.Length);
+        }
+
+        private void WriteKeys(Stream requestStream, CaptchaConfig config, byte[] boundarybytes)
+        {
             string formdataTemplate = "Content-Disposition: form-data; name=\"{0}\"\r\n\r\n{1}";
+
+            NameValueCollection nvc = new NameValueCollection {{"key", _apiKey}};
+            if (config != null)
+                nvc.Add(config.GetParameters());
+
             foreach (string key in nvc.Keys)
             {
                 requestStream.Write(boundarybytes, 0, boundarybytes.Length);
                 string formitem = string.Format(formdataTemplate, key, nvc[key]);
-                byte[] formitembytes = System.Text.Encoding.UTF8.GetBytes(formitem);
+                byte[] formitembytes = Encoding.UTF8.GetBytes(formitem);
                 requestStream.Write(formitembytes, 0, formitembytes.Length);
             }
             requestStream.Write(boundarybytes, 0, boundarybytes.Length);
-
-            string headerTemplate = "Content-Disposition: form-data; name=\"{0}\"; filename=\"{1}\"\r\nContent-Type: {2}\r\n\r\n";
-            string header = string.Format(headerTemplate, "file", fileName, "image/jpeg");
-            byte[] headerbytes = System.Text.Encoding.UTF8.GetBytes(header);
-            requestStream.Write(headerbytes, 0, headerbytes.Length);
-
-            FileStream fileStream = new FileStream(fileName, FileMode.Open, FileAccess.Read);
-            byte[] buffer = new byte[4096];
-            int bytesRead = 0;
-            while ((bytesRead = fileStream.Read(buffer, 0, buffer.Length)) != 0)
-            {
-                requestStream.Write(buffer, 0, bytesRead);
-            }
-            fileStream.Close();
-
-            byte[] trailer = System.Text.Encoding.ASCII.GetBytes("\r\n--" + boundary + "--\r\n");
-            requestStream.Write(trailer, 0, trailer.Length);
-            requestStream.Close();
-
-            using (WebResponse response = request.GetResponse())
-            {
-                Stream responseStream = response.GetResponseStream();
-                StreamReader responseReader = new StreamReader(responseStream);
-                return ParseAnswer(responseReader.ReadToEnd());
-            }
-
         }
 
         /// <summary>
         /// Получить текущий баланс аккаунта
         /// </summary>
         /// <returns></returns>
-        public decimal GetBalance()
+        public async Task<decimal> GetBalance()
         {
-            string url = string.Format("{0}/res.php?key={1}&action=getbalance", host, api_key);
-            string string_balance = MakeGetRequest(url);
-            decimal balance = decimal.Parse(string_balance, CultureInfo.InvariantCulture.NumberFormat);
+            string url = $"{Host}/res.php?key={_apiKey}&action=getbalance";
+            string stringBalance = await MakeGetRequest(url);
+            decimal balance = decimal.Parse(stringBalance, CultureInfo.InvariantCulture.NumberFormat);
             return balance;
         }
 
         /// <summary>
         /// Выполнение Get запроса по указанному URL
         /// </summary>
-        private string MakeGetRequest(string url)
+        private async Task<string> MakeGetRequest(string url)
         {
-            HttpWebRequest request = (HttpWebRequest)HttpWebRequest.Create(url);
-            request.Method = "GET";
-            string serviceAnswer = "";
-            using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-            {
-                Stream responseStream = response.GetResponseStream();
-                StreamReader reader = new StreamReader(responseStream);
-                serviceAnswer = reader.ReadToEnd();
-            }
+            var client = new WebClient();
+            var serviceAnswer = await client.DownloadStringTaskAsync(url);
             return ParseAnswer(serviceAnswer);
         }
 
@@ -160,8 +186,8 @@ namespace mevoronin.RuCaptchaNETClient
         /// </summary>
         private string ParseAnswer(string serviceAnswer)
         {
-            if (errors.Keys.Contains(serviceAnswer))
-                throw new RuCaptchaException(string.Format("{0} ({1})", errors[serviceAnswer], serviceAnswer));
+            if (Errors.Keys.Contains(serviceAnswer))
+                throw new RuCaptchaException($"{Errors[serviceAnswer]} ({serviceAnswer})");
             else if (serviceAnswer.StartsWith("OK|"))
                 return serviceAnswer.Substring(3);
             else
