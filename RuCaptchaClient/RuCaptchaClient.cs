@@ -58,6 +58,32 @@ namespace mevoronin.RuCaptchaNETClient
             this._apiKey = apiKey;
         }
 
+
+        public async Task<string> SolveCapthca(Uri fileUrl, TimeSpan? timeout = null ,CaptchaConfig config = null)
+        {
+            TimeSpan timeSpan = timeout ?? TimeSpan.FromSeconds(60);
+            var captchaId = await UploadCaptchaFile(fileUrl, config);
+            var startTime = DateTime.UtcNow;
+
+
+            while (true)
+            {
+                await Task.Delay(3000);
+
+                try
+                {
+                    return await GetCaptcha(captchaId);
+                }
+                catch (Exception e)
+                {
+                    if (startTime.Add(timeSpan) < DateTime.UtcNow)
+                    {
+                        throw;
+                    }
+                }
+            }
+        }
+
         /// <summary>
         /// Получить расшифрованное значение капчи
         /// </summary>
@@ -176,7 +202,7 @@ namespace mevoronin.RuCaptchaNETClient
         /// </summary>
         private async Task<string> MakeGetRequest(string url)
         {
-            var client = new WebClient();
+            var client = new WebClient{Encoding = Encoding.UTF8};
             var serviceAnswer = await client.DownloadStringTaskAsync(url);
             return ParseAnswer(serviceAnswer);
         }
